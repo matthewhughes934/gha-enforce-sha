@@ -1,0 +1,72 @@
+[build-system]
+# setuptools version with auto inclusion of 'py.typed'
+requires = ["setuptools>=69.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gha-enforce-sha"
+version = "0.1.0"
+authors = [
+    { name = "Matthew Hughes", email = "matthewhughes934@gmail.com" },
+]
+description = "Enforce sha versioning in Github Actions"
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+    "Operating System :: OS Independent",
+]
+requires-python = ">= 3.9"
+dependencies = ["ruamel.yaml"]
+
+[project.scripts]
+gha-enforce-sha = "gha_enforce_sha.main:main"
+
+[project.urls]
+homepage = "https://github.com/matthewhughes934/gha-enforce-sha"
+
+[project.optional-dependencies]
+test = [
+     # version required for pyproject.toml support
+    "pytest>=6.0",
+    "coverage[toml]",
+    "covdefaults>=2.2",
+]
+lint = ["pre-commit", "py-unused-deps"]
+
+[tool.setuptools.packages.find]
+namespaces = false
+include = ["gha_enforce_sha"]
+
+[tool.mypy]
+strict = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+warn_return_any = false
+strict_equality = false
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers"
+filterwarnings = "error"
+
+[tool.isort]
+profile = "black"
+
+[tool.coverage.run]
+plugins = ["covdefaults"]
+branch = true
+source = ["gha_enforce_sha", "tests/"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 100
