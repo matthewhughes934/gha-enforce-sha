@@ -1,0 +1,5 @@
+[flake8]
+# https://black.readthedocs.io/en/stable/guides/using_black_with_other_tools.html#bugbear
+max-line-length = 80
+extend-select = B950,UNT001,INP001
+extend-ignore = E203,E501,E701
