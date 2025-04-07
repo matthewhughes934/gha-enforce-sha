@@ -101,7 +101,7 @@ VALID_FILES = {
     "yaml_content",
     (pytest.param(value, id=key) for key, value in VALID_FILES.items()),
 )
-def test_actions_with_shas(
+def test_checking_ok(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], yaml_content: str
 ) -> None:
     path = tmp_path / "file.yaml"
@@ -188,7 +188,7 @@ INVALID_CASES = {
     "case",
     (pytest.param(value, id=key) for key, value in INVALID_CASES.items()),
 )
-def test_actions_without_shas(
+def test_checking_failures(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], case: InvalidCase
 ) -> None:
     path = tmp_path / "file.yaml"
@@ -211,7 +211,7 @@ def test_actions_without_shas(
     assert captured.out == ""
 
 
-def test_actions_without_shas_multiple_files(
+def test_checking_failure_multiple_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     file_map = {
@@ -335,7 +335,7 @@ def create_commit(repo_path: Path) -> str:
     return must_run_git_cmd("-C", str(repo_path), "rev-parse", "HEAD")
 
 
-def test_resolving_tags(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     tags1 = ("v1.0.0", "v1.1.0", "v1.1.1", "v2.0.0")
     tags2 = ("v0.1.0", "v3.2.0")
 
@@ -345,16 +345,17 @@ def test_resolving_tags(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
     tag_map2 = create_repo(repo2, tags2)
 
     workflows = {
+        # each file is intentionally dented separately to ensure we always write back with the same indentation
         "first.yaml": dedent(
             """\
             jobs:
-              first:
-                steps:
-                - uses: fake-user/fake-repo1@v1
-                - uses: fake-user/fake-repo1@v1.0
-                - uses: fake-user/fake-repo1@v1.1
-                - uses: fake-user/fake-repo2@v0
-                - uses: fake-user/fake-repo2
+                first:
+                    steps:
+                        - uses: fake-user/fake-repo1@v1
+                        - uses: fake-user/fake-repo1@v1.0
+                        - uses: fake-user/fake-repo1@v1.1
+                        - uses: fake-user/fake-repo2@v0
+                        - uses: fake-user/fake-repo2
             """,
         ),
         "second.yaml": dedent(
@@ -372,13 +373,13 @@ def test_resolving_tags(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> N
         "first.yaml": dedent(
             f"""\
             jobs:
-              first:
-                steps:
-                - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
-                - uses: fake-user/fake-repo1@{tag_map1['v1.0.0']}  # v1.0.0
-                - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
-                - uses: fake-user/fake-repo2@{tag_map2['v0.1.0']}  # v0.1.0
-                - uses: fake-user/fake-repo2@{tag_map2['v3.2.0']}  # v3.2.0
+                first:
+                    steps:
+                        - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
+                        - uses: fake-user/fake-repo1@{tag_map1['v1.0.0']}  # v1.0.0
+                        - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
+                        - uses: fake-user/fake-repo2@{tag_map2['v0.1.0']}  # v0.1.0
+                        - uses: fake-user/fake-repo2@{tag_map2['v3.2.0']}  # v3.2.0
             """,
         ),
         "second.yaml": dedent(

@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import NamedTuple, Self
 
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.comments import CommentedMap, LineCol
 
 from gha_enforce_sha.errors import UserError, log_error
 from gha_enforce_sha.git import init_repo_from_action, resolve_tag
@@ -47,7 +47,16 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
     else:
         paths_iter = iter(paths)
 
-    reps_map = {path: tuple(_find_missing_shas(Path(path))) for path in paths_iter}
+    content_map: dict[str, str] = {}
+    for path in paths_iter:
+        with open(path) as f:
+            content_map[path] = f.read()
+
+    yaml = YAML()
+    reps_map = {
+        path: tuple(_find_missing_shas(path, yaml.load(content)))
+        for path, content in content_map.items()
+    }
     # fetch all the corresponding repos
     repo_map = defaultdict(list)
     # map of repo -> partial tag -> [actual_tag, sha]
@@ -64,23 +73,23 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
                 resolved_tag_map[action][version] = (full_tag, sha)
 
     for path, reps in reps_map.items():
-        # give me the new line plz, i.e. the fix
-        content = YAML().load(Path(path))
+        orig_lines = content_map[path].splitlines(keepends=True)
         for rep in reps:
             full_tag, sha = resolved_tag_map[rep.action_version.path][
                 rep.action_version.version
             ]
-            new_line = f"{rep.action_version.path}@{sha}"
-            if "jobs" in content:
-                step = content["jobs"][rep.job_name]["steps"][rep.step_index]
-            else:
-                step = content["runs"][rep.job_name]["steps"][rep.step_index]
-            # line.replace(action@version -> action@version # blah...
-            step["uses"] = new_line
-            step.yaml_add_eol_comment(f"# {full_tag}", "uses")
+            new_version = ActionVersion(path=rep.action_version.path, version=sha)
+            new_line = f"{new_version.to_str()}  # {full_tag}"
+            orig_lines[rep.location.line] = (
+                orig_lines[rep.location.line][: rep.location.col]
+                + "uses: "
+                + new_line
+                # the original line ending
+                + orig_lines[rep.location.line][-1]
+            )
 
         with open(path, "w") as f:
-            YAML().dump(content, f)
+            f.write("".join(orig_lines))
 
     return all(len(reps) == 0 for reps in reps_map.values())
 
@@ -95,13 +104,19 @@ def _check_gha_shas(paths: Sequence[str]) -> bool:
     else:
         paths_iter = iter(paths)
 
-    success = True
+    yaml = YAML()
+    content_map: dict[str, str] = {}
     for path in paths_iter:
-        for rep in _find_missing_shas(Path(path)):
+        with open(path) as f:
+            content_map[path] = f.read()
+
+    success = True
+    for path, content in content_map.items():
+        for rep in _find_missing_shas(path, yaml.load(content)):
             if success:
                 success = False
             print(
-                f"in workflow file {rep.path}: in job {rep.job_name}: in step #{rep.step_index+1}: {rep.action_version}",
+                f"in workflow file {rep.path}: in job {rep.job_name}: in step #{rep.step_index+1}: {rep.action_version.to_str()}",
                 file=sys.stderr,
             )
 
@@ -139,7 +154,7 @@ class ActionVersion(NamedTuple):
     path: str
     version: str | None
 
-    def __str__(self) -> str:
+    def to_str(self) -> str:
         if self.version is not None:
             return f"{self.path}{_ACTION_VERSION_SEP}{self.version or ''}"
         else:
@@ -155,15 +170,16 @@ class ActionVersion(NamedTuple):
 
 
 class MissingSHA(NamedTuple):
-    path: Path
+    path: str
     job_name: str
     step_index: int
+    location: LineCol
     action_version: ActionVersion
 
 
-def _find_missing_shas(workflow_path: Path) -> Generator[MissingSHA, None, None]:
-    content = YAML().load(workflow_path)
-
+def _find_missing_shas(
+    workflow_path: str, content: CommentedMap
+) -> Generator[MissingSHA, None, None]:
     if "jobs" in content:
         jobs = content["jobs"]
     elif "runs" in content:
@@ -189,6 +205,7 @@ def _find_missing_shas(workflow_path: Path) -> Generator[MissingSHA, None, None]
                     job_name=job_name,
                     action_version=action_version,
                     step_index=i,
+                    location=step.lc,
                 )
 
 
