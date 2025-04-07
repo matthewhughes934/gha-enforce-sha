@@ -215,6 +215,7 @@ def test_checking_failure_multiple_files(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     file_map = {
+        # implicitly test default file discovery
         ".github/workflows/first.yaml": INVALID_CASES[
             "single_job_single_step_major_version"
         ],
@@ -242,7 +243,7 @@ def test_checking_failure_multiple_files(
 
     captured = capsys.readouterr()
 
-    assert return_code == 1
+    assert return_code == 1, captured.err
     assert captured.out == ""
     # len of each entry + one newline for each entry
     assert len(captured.err) == sum(map(len, expected_report_parts)) + len(
@@ -307,7 +308,7 @@ def test_errors_on_invalid_default_path(
 
     captured = capsys.readouterr()
 
-    assert return_code == 1
+    assert return_code == 1, captured.err
     assert captured.err == expected_error
     assert captured.out == ""
 
@@ -354,6 +355,7 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
                         - uses: fake-user/fake-repo1@v1
                         - uses: fake-user/fake-repo1@v1.0
                         - uses: fake-user/fake-repo1@v1.1
+                        - uses: fake-user/fake-repo1@v1.1.1
                         - uses: fake-user/fake-repo2@v0
                         - uses: fake-user/fake-repo2
             """,
@@ -377,6 +379,7 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
                     steps:
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo1@{tag_map1['v1.0.0']}  # v1.0.0
+                        - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo2@{tag_map2['v0.1.0']}  # v0.1.0
                         - uses: fake-user/fake-repo2@{tag_map2['v3.2.0']}  # v3.2.0
@@ -417,3 +420,39 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     for path in filepaths:
         with open(path) as f:
             assert expected_workflows[os.path.basename(path)] == f.read()
+
+
+def test_enforcing_errors_on_bad_tag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tags = ("v1.0.0",)
+    repo = tmp_path / "repo1"
+    create_repo(repo, tags)
+    bad_tag = "v2"
+
+    workflow_path = tmp_path / "workflow.yaml"
+    content = dedent(
+        f"""\
+        jobs:
+            job-bad-version:
+                steps:
+                    - uses:  fake-user/fake-repo@{bad_tag}
+        """,
+    )
+    expected_err = "could not find any tag matching " + bad_tag
+
+    workflow_path.write_text(content)
+
+    args = ("enforce", str(workflow_path))
+    with git_config(
+        f"url.file://{repo}.insteadOf", "https://github.com/fake-user/fake-repo"
+    ):
+        return_code = main(args)
+
+    captured = capsys.readouterr()
+
+    assert return_code == 1, captured.err
+    assert captured.out == ""
+    assert captured.err == "Error: " + expected_err + "\n"
+    with open(workflow_path) as f:
+        assert f.read() == content, "workflow should be unmodified on error"

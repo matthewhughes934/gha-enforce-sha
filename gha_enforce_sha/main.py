@@ -1,13 +1,14 @@
 import argparse
 import itertools
 import logging
+import os
+import os.path
 import string
 import sys
 import tempfile
 from collections import defaultdict
 from collections.abc import Generator, Iterator, Sequence
-from pathlib import Path
-from typing import NamedTuple, Self
+from typing import Iterable, NamedTuple, Self
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, LineCol
@@ -38,44 +39,31 @@ def _run(args: argparse.Namespace) -> int:
         return _check_gha_shas(args.filepaths)
     elif args.command == "enforce":
         return _enforce_gha_shas(args.filepaths)
-    assert False, "unimplemented command"
+    assert False, "unimplemented command"  # pragma: no cover
 
 
 def _enforce_gha_shas(paths: Sequence[str]) -> bool:
-    if len(paths) == 0:
-        paths_iter: Iterator[str] = _iter_workflows()
-    else:
-        paths_iter = iter(paths)
-
-    content_map: dict[str, str] = {}
-    for path in paths_iter:
-        with open(path) as f:
-            content_map[path] = f.read()
+    content_map = _load_yamls(paths)
 
     yaml = YAML()
     reps_map = {
         path: tuple(_find_missing_shas(path, yaml.load(content)))
         for path, content in content_map.items()
     }
-    # fetch all the corresponding repos
-    repo_map = defaultdict(list)
-    # map of repo -> partial tag -> [actual_tag, sha]
-    resolved_tag_map: dict[str, dict[str | None, tuple[str, str]]] = defaultdict(dict)
-    for rep in itertools.chain.from_iterable(reps_map.values()):
-        repo_map[rep.action_version.path].append(rep.action_version.version)
 
-    for action, versions in repo_map.items():
-        # TODO: caching: avoid looking up the same tag twice...
-        with tempfile.TemporaryDirectory() as repo_path:
-            init_repo_from_action(repo_path, _repo_url_from_action(action))
-            for version in versions:
-                full_tag, sha = resolve_tag(repo_path, version)
-                resolved_tag_map[action][version] = (full_tag, sha)
+    repo_partial_tags = defaultdict(list)
+    for rep in itertools.chain.from_iterable(reps_map.values()):
+        repo_partial_tags[rep.action_version.path].append(rep.action_version.version)
+
+    repo_resolved_tags = {
+        action: _resolve_tags(action, versions)
+        for action, versions in repo_partial_tags.items()
+    }
 
     for path, reps in reps_map.items():
         orig_lines = content_map[path].splitlines(keepends=True)
         for rep in reps:
-            full_tag, sha = resolved_tag_map[rep.action_version.path][
+            full_tag, sha = repo_resolved_tags[rep.action_version.path][
                 rep.action_version.version
             ]
             new_version = ActionVersion(path=rep.action_version.path, version=sha)
@@ -94,23 +82,29 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
     return all(len(reps) == 0 for reps in reps_map.values())
 
 
+def _resolve_tags(
+    action: str, partial_tags: Iterable[str | None]
+) -> dict[str | None, tuple[str, str]]:
+    resolved_tags = {}
+
+    with tempfile.TemporaryDirectory() as repo_path:
+        init_repo_from_action(repo_path, _repo_url_from_action(action))
+        for partial_tag in partial_tags:
+            full_tag, sha = resolve_tag(repo_path, partial_tag)
+            resolved_tags[partial_tag] = (full_tag, sha)
+
+    return resolved_tags
+
+
 def _repo_url_from_action(path: str) -> str:
     return "https://github.com/" + path
 
 
 def _check_gha_shas(paths: Sequence[str]) -> bool:
-    if len(paths) == 0:
-        paths_iter: Iterator[str] = _iter_workflows()
-    else:
-        paths_iter = iter(paths)
-
-    yaml = YAML()
-    content_map: dict[str, str] = {}
-    for path in paths_iter:
-        with open(path) as f:
-            content_map[path] = f.read()
+    content_map = _load_yamls(paths)
 
     success = True
+    yaml = YAML()
     for path, content in content_map.items():
         for rep in _find_missing_shas(path, yaml.load(content)):
             if success:
@@ -209,18 +203,35 @@ def _find_missing_shas(
                 )
 
 
-def _is_yaml(path: Path) -> bool:
-    return path.suffix in (".yaml", ".yml")
+def _is_yaml(path: str) -> bool:
+    _, ext = os.path.splitext(path)
+    return ext in (".yaml", ".yml")
+
+
+def _load_yamls(paths: Sequence[str]) -> dict[str, str]:
+    if len(paths) == 0:
+        paths_iter: Iterator[str] = _iter_workflows()
+    else:
+        paths_iter = iter(paths)
+
+    content_map: dict[str, str] = {}
+    for path in paths_iter:
+        with open(path) as f:
+            content_map[path] = f.read()
+
+    return content_map
 
 
 def _iter_workflows() -> Generator[str, None, None]:
-    workflow_path = Path(".github") / "workflows"
-    if not workflow_path.is_dir():
+    workflow_path = os.path.join(".github", "workflows")
+    if not os.path.isdir(workflow_path):
         raise UserError(
             f"cannot list paths in '{workflow_path}': it doesn't exist or isn't a directory"
         )
 
-    yield from filter(_is_yaml, workflow_path.iterdir())
+    for file in os.listdir(workflow_path):
+        if _is_yaml(file):
+            yield os.path.join(workflow_path, file)
 
 
 def _is_local(workflow_reference: str) -> bool:

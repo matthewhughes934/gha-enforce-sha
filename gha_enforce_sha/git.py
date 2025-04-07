@@ -35,10 +35,9 @@ def resolve_tag(repo_path: str, partial_tag: str | None) -> tuple[str, str]:
     )
 
     if stdout == "":
-        raise UserError("no matching tag...")
+        raise UserError(f"could not find any tag matching {partial_tag}")
 
     tags = stdout.rstrip("\n").split("\n")
-
     tag = tags[0]
     return tag, must_run_git_cmd("-C", repo_path, "rev-parse", tag)
 
