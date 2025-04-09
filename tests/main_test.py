@@ -53,6 +53,22 @@ VALID_FILES = {
                     - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         """,
     ),
+    "single_job_single_step_nested_action": dedent(
+        """\
+        jobs:
+            just-checkout:
+                steps:
+                    - uses: some-user/some-repo/path/to/action@11bd71901bbe5b1630ceea73d27597364c9af683
+        """,
+    ),
+    "single_job_no_steps": dedent(
+        """\
+        jobs:
+            just-checkout:
+                # TODO: validation should check this
+                uses: octo-org/this-repo/.github/workflows/workflow-1.yml@172239021f7ba04fe7327647b213799853a9eb89
+        """,
+    ),
     "single_action_single_step": dedent(
         """\
         runs:
@@ -270,34 +286,6 @@ def test_errors_on_non_workflow_yaml(
     assert captured.out == ""
 
 
-def test_errors_on_job_with_no_steps(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    yaml_content = dedent(
-        """\
-        jobs:
-            job-missing-steps:
-                name: Bad job
-    """
-    )
-    path = tmp_path / "file.yaml"
-    path.write_text(yaml_content)
-    args = ("check", str(path))
-
-    expected_err = (
-        "Error: cannot process job (name=job-missing-steps) in "
-        + str(path)
-        + ": job has no steps\n"
-    )
-
-    return_code = main(args)
-    captured = capsys.readouterr()
-
-    assert return_code == 1
-    assert captured.err == expected_err
-    assert captured.out == ""
-
-
 def test_errors_on_invalid_default_path(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -356,6 +344,7 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
                         - uses: fake-user/fake-repo1@v1.0
                         - uses: fake-user/fake-repo1@v1.1
                         - uses: fake-user/fake-repo1@v1.1.1
+                        - uses: fake-user/fake-repo1/nested/action@v1.1.1
                         - uses: fake-user/fake-repo2@v0
                         - uses: fake-user/fake-repo2
             """,
@@ -381,6 +370,7 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
                         - uses: fake-user/fake-repo1@{tag_map1['v1.0.0']}  # v1.0.0
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
+                        - uses: fake-user/fake-repo1/nested/action@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo2@{tag_map2['v0.1.0']}  # v0.1.0
                         - uses: fake-user/fake-repo2@{tag_map2['v3.2.0']}  # v3.2.0
             """,

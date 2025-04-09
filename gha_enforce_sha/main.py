@@ -97,7 +97,11 @@ def _resolve_tags(
 
 
 def _repo_url_from_action(path: str) -> str:
-    return "https://github.com/" + path
+    path_split = "/"
+    # for nested actions, like: my-user/my-repo/path/to/action
+    # we only want to extract: my-user/my-repo
+    parts = path.split(path_split, maxsplit=2)
+    return "https://github.com/" + path_split.join(parts[:2])
 
 
 def _check_gha_shas(paths: Sequence[str]) -> bool:
@@ -183,9 +187,7 @@ def _find_missing_shas(
 
     for job_name, job in jobs.items():
         if "steps" not in job:
-            raise UserError(
-                f"cannot process job (name={job_name}) in {workflow_path}: job has no steps"
-            )
+            continue
 
         for i, step in enumerate(job["steps"]):
             action_version = _parse_action(step)
