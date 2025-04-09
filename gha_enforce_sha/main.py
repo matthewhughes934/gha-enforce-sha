@@ -8,10 +8,11 @@ import sys
 import tempfile
 from collections import defaultdict
 from collections.abc import Generator, Iterator, Sequence
-from typing import Iterable, NamedTuple, Self
+from typing import Iterable, NamedTuple
 
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap, LineCol
+from typing_extensions import Self
 
 from gha_enforce_sha.errors import UserError, log_error
 from gha_enforce_sha.git import init_repo_from_action, resolve_tag
