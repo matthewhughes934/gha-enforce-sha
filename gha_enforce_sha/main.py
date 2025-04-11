@@ -8,6 +8,7 @@ import sys
 import tempfile
 from collections import defaultdict
 from collections.abc import Generator, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Iterable, NamedTuple
 
 from ruamel.yaml import YAML
@@ -72,10 +73,7 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
     for rep in itertools.chain.from_iterable(reps_map.values()):
         repo_partial_tags[rep.action_version.path].append(rep.action_version.version)
 
-    repo_resolved_tags = {
-        action: _resolve_tags(action, versions)
-        for action, versions in repo_partial_tags.items()
-    }
+    repo_resolved_tags = _resolve_all_tags(repo_partial_tags)
 
     for path, reps in reps_map.items():
         orig_lines = content_map[path].splitlines(keepends=True)
@@ -97,6 +95,17 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
             f.write("".join(orig_lines))
 
     return all(len(reps) == 0 for reps in reps_map.values())
+
+
+def _resolve_all_tags(
+    tag_map: dict[str, list[str | None]]
+) -> dict[str, dict[str | None, tuple[str, str]]]:
+    futures_map = {}
+    with ThreadPoolExecutor(max_workers=100) as executor:
+        for action, versions in tag_map.items():
+            futures_map[action] = executor.submit(_resolve_tags, action, versions)
+
+        return {action: futures_map[action].result() for action in futures_map.keys()}
 
 
 def _resolve_tags(
