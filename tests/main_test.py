@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import os.path
 from collections.abc import Collection
@@ -446,3 +447,23 @@ def test_enforcing_errors_on_bad_tag(
     assert captured.err == "Error: " + expected_err + "\n"
     with open(workflow_path) as f:
         assert f.read() == content, "workflow should be unmodified on error"
+
+
+@pytest.mark.parametrize(
+    ("args", "expected_logging_level"),
+    (
+        (["--verbose"], logging.INFO),
+        (["--verbose", "--verbose"], logging.DEBUG),
+        (["--verbose", "--verbose", "--verbose"], logging.DEBUG),
+    ),
+)
+def test_logging_level_set_from_args(
+    args: list[str], expected_logging_level: int
+) -> None:
+    args = [*args, "check"]
+    return_code = main(args)
+
+    logger = logging.getLogger("unused-deps")
+
+    assert return_code == 1
+    assert logger.getEffectiveLevel() == expected_logging_level

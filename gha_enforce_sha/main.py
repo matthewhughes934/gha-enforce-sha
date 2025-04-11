@@ -26,6 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = _build_arg_parse()
     args = parser.parse_args(argv)
+    _configure_logging(args.verbose)
 
     try:
         return 0 if _run(args) else 1
@@ -41,6 +42,21 @@ def _run(args: argparse.Namespace) -> int:
     elif args.command == "enforce":
         return _enforce_gha_shas(args.filepaths)
     assert False, "unimplemented command"  # pragma: no cover
+
+
+def _configure_logging(verbosity: int) -> None:
+    if verbosity == 0:
+        return
+    if verbosity > 2:
+        verbosity = 2
+
+    log_level = {
+        1: logging.INFO,
+        2: logging.DEBUG,
+    }[verbosity]
+
+    logging.basicConfig(level=log_level)
+    logger.setLevel(log_level)
 
 
 def _enforce_gha_shas(paths: Sequence[str]) -> bool:
@@ -89,7 +105,9 @@ def _resolve_tags(
     resolved_tags = {}
 
     with tempfile.TemporaryDirectory() as repo_path:
-        init_repo_from_action(repo_path, _repo_url_from_action(action))
+        repo_url = _repo_url_from_action(action)
+        logger.info("fetching from %s", repo_url)
+        init_repo_from_action(repo_path, repo_url)
         for partial_tag in partial_tags:
             full_tag, sha = resolve_tag(repo_path, partial_tag)
             resolved_tags[partial_tag] = (full_tag, sha)
@@ -124,6 +142,12 @@ def _check_gha_shas(paths: Sequence[str]) -> bool:
 
 def _build_arg_parse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 
@@ -179,6 +203,7 @@ class MissingSHA(NamedTuple):
 def _find_missing_shas(
     workflow_path: str, content: CommentedMap
 ) -> Generator[MissingSHA, None, None]:
+    logger.debug("checking file %s", workflow_path)
     if "jobs" in content:
         jobs = content["jobs"]
     elif "runs" in content:
