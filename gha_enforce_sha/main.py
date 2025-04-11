@@ -11,7 +11,7 @@ from collections.abc import Generator, Iterator, Sequence
 from typing import Iterable, NamedTuple
 
 from ruamel.yaml import YAML
-from ruamel.yaml.comments import CommentedMap, LineCol
+from ruamel.yaml.comments import CommentedMap
 from typing_extensions import Self
 
 from gha_enforce_sha.errors import UserError, log_error
@@ -87,7 +87,6 @@ def _enforce_gha_shas(paths: Sequence[str]) -> bool:
             new_line = f"{new_version.to_str()}  # {full_tag}"
             orig_lines[rep.location.line] = (
                 orig_lines[rep.location.line][: rep.location.col]
-                + "uses: "
                 + new_line
                 # the original line ending
                 + orig_lines[rep.location.line][-1]
@@ -192,11 +191,16 @@ class ActionVersion(NamedTuple):
             return cls(path=parts[0], version=parts[1])
 
 
+class Location(NamedTuple):
+    line: int
+    col: int
+
+
 class MissingSHA(NamedTuple):
     path: str
     job_name: str
     step_index: int
-    location: LineCol
+    location: Location
     action_version: ActionVersion
 
 
@@ -227,7 +231,7 @@ def _find_missing_shas(
                     job_name=job_name,
                     action_version=action_version,
                     step_index=i,
-                    location=step.lc,
+                    location=Location(*step.lc.value("uses")),
                 )
 
 

@@ -341,7 +341,8 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
             jobs:
                 first:
                     steps:
-                        - uses: fake-user/fake-repo1@v1
+                        - name: wat
+                          uses: fake-user/fake-repo1@v1
                         - uses: fake-user/fake-repo1@v1.0
                         - uses: fake-user/fake-repo1@v1.1
                         - uses: fake-user/fake-repo1@v1.1.1
@@ -367,7 +368,8 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
             jobs:
                 first:
                     steps:
-                        - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
+                        - name: wat
+                          uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo1@{tag_map1['v1.0.0']}  # v1.0.0
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
                         - uses: fake-user/fake-repo1@{tag_map1['v1.1.1']}  # v1.1.1
