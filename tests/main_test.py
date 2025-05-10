@@ -329,6 +329,10 @@ def create_commit(repo_path: Path) -> str:
     must_run_git_cmd(
         "-C",
         str(repo_path),
+        "-c",
+        "user.name=gha-enforce-sha",
+        "-c",
+        "user.email=gha-enforce-sha@example.com",
         "commit",
         "--allow-empty",
         "--allow-empty-message",
@@ -529,10 +533,11 @@ def test_enforce_errors_on_git_failure(
 def test_logging_level_set_from_args(
     args: list[str], expected_logging_level: int
 ) -> None:
+    # doubles as a self-check of our GHA
     args = [*args, "check"]
     return_code = main(args)
 
     logger = logging.getLogger("unused-deps")
 
-    assert return_code == 1
+    assert return_code == 0
     assert logger.getEffectiveLevel() == expected_logging_level
