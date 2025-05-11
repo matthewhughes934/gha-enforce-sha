@@ -245,10 +245,10 @@ def test_checking_failure_multiple_files(
 ) -> None:
     file_map = {
         # implicitly test default file discovery
-        ".github/workflows/first.yaml": INVALID_CASES[
+        Path(".github/workflows/first.yaml"): INVALID_CASES[
             "single_job_single_step_major_version"
         ],
-        ".github/workflows/second.yaml": INVALID_CASES[
+        Path(".github/workflows/second.yaml"): INVALID_CASES[
             "single_job_single_step_full_tag"
         ],
     }
@@ -302,7 +302,8 @@ def test_errors_on_non_workflow_yaml(
 def test_errors_on_invalid_default_path(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    expected_error = "Error: cannot list paths in '.github/workflows': it doesn't exist or isn't a directory\n"
+    workflows_path = Path(".github/workflows")
+    expected_error = f"Error: cannot list paths in '{workflows_path}': it doesn't exist or isn't a directory\n"
 
     with as_cwd(tmp_path):  # some path with not .github/
         return_code = main(["check"])
