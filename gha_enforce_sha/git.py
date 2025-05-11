@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import subprocess
 
 from gha_enforce_sha.errors import UserError
