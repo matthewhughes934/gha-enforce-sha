@@ -51,7 +51,7 @@ def must_run_git_cmd(*args: str) -> str:
     retcode, stdout, stderr = _run_git_cmd(*args)
     if retcode != 0:
         raise UserError(
-            f"failed to run git command:{args}\nstdout: {stdout}\nstderr: {stderr}"
+            f"failed to run git command: {args}\nstdout: {stdout}\nstderr: {stderr}"
         )
 
     return stdout.rstrip("\n")
