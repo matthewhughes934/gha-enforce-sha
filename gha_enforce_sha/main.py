@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import itertools
 import logging
@@ -206,7 +208,7 @@ class MissingSHA(NamedTuple):
 
 def _find_missing_shas(
     workflow_path: str, content: CommentedMap
-) -> Generator[MissingSHA, None, None]:
+) -> Generator[MissingSHA]:
     logger.debug("checking file %s", workflow_path)
     if "jobs" in content:
         jobs = content["jobs"]
@@ -254,7 +256,7 @@ def _load_yamls(paths: Sequence[str]) -> dict[str, str]:
     return content_map
 
 
-def _iter_workflows() -> Generator[str, None, None]:
+def _iter_workflows() -> Generator[str]:
     workflow_path = os.path.join(".github", "workflows")
     if not os.path.isdir(workflow_path):
         raise UserError(
