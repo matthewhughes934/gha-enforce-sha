@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from textwrap import dedent
 from typing import Generator, NamedTuple
+from unittest import mock
 
 import pytest
 
@@ -131,6 +132,17 @@ def test_checking_ok(
     assert return_code == 0, captured.err
     assert captured.out == ""
     assert captured.err == ""
+
+
+def test_checking_ok_with_no_workflows(tmp_path: Path) -> None:
+    workflows_path = tmp_path / ".github" / "workflows"
+    workflows_path.mkdir(parents=True)
+    (workflows_path / "non_yaml.txt").write_text("just some text\n")
+
+    with as_cwd(tmp_path):
+        return_code = main(["check"])
+
+    assert return_code == 0
 
 
 class InvalidCase(NamedTuple):
@@ -335,7 +347,7 @@ def test_enforcing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     tag_map2 = create_repo(repo2, tags2)
 
     workflows = {
-        # each file is intentionally dented separately to ensure we always write back with the same indentation
+        # each file is intentionally indented separately to ensure we always write back with the same indentation
         "first.yaml": dedent(
             """\
             jobs:
@@ -449,6 +461,60 @@ def test_enforcing_errors_on_bad_tag(
     assert captured.err == "Error: " + expected_err + "\n"
     with open(workflow_path) as f:
         assert f.read() == content, "workflow should be unmodified on error"
+
+
+def test_enforce_errors_on_git_invocation_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workflow_content = dedent(
+        """\
+        jobs:
+            first:
+                steps:
+                - uses: fake-user/fake-repo@v1.2.3
+        """
+    )
+    workflow_path = tmp_path / "file.yaml"
+    workflow_path.write_text(workflow_content)
+    args = ("enforce", str(workflow_path))
+
+    # empty path so we can't find 'git'
+    with mock.patch.dict(os.environ, {"PATH": ""}):
+        return_code = main(args)
+
+    captured = capsys.readouterr()
+    expected_err_prefix = "Error: failed running command"
+
+    assert return_code == 1
+    assert captured.err[: len(expected_err_prefix)] == expected_err_prefix
+
+
+def test_enforce_errors_on_git_failure(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workflow_content = dedent(
+        """\
+        jobs:
+            first:
+                steps:
+                - uses: fake-user/fake-repo@v1.2.3
+        """
+    )
+    workflow_path = tmp_path / "file.yaml"
+    workflow_path.write_text(workflow_content)
+    args = ("enforce", str(workflow_path))
+
+    # point to some directory that isn't a git directory
+    with git_config(
+        f"url.file://{tmp_path}.insteadOf", "https://github.com/fake-user/fake-repo"
+    ):
+        return_code = main(args)
+
+    captured = capsys.readouterr()
+    expected_err_prefix = "Error: failed to run git command: "
+
+    assert return_code == 1
+    assert captured.err[: len(expected_err_prefix)] == expected_err_prefix
 
 
 @pytest.mark.parametrize(
