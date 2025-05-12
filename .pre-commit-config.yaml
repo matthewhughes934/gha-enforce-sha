@@ -24,14 +24,6 @@ repos:
     rev: v5.0.0
     hooks:
     -   id: check-yaml
--   repo: https://github.com/matthewhughes934/py-unused-deps
-    rev: v0.4.2
-    hooks:
-    -   id: py-unused-deps
-        args:
-          - "--distribution"
-          - "gha-enforce-sha"
-          - "gha_enforce_sha"
 -   repo: "https://github.com/matthewhughes934/pre-commit-format-markdown"
     rev: v0.5.0
     hooks:
